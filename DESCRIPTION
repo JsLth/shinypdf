@@ -15,6 +15,7 @@ Imports:
     bslib,
     bsicons,
     qpdf,
+    shinyWidgets,
     sortable,
     zip
 Config/roxygen2/version: 8.0.0

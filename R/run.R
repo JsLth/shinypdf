@@ -5,5 +5,12 @@
 #' @return A [shiny::shinyApp()] object (invisibly).
 #' @export
 run_app <- function() {
-  shinyApp(ui = build_ui(), server = server)
+  shinyApp(
+    ui = build_ui(),
+    server = server,
+    onStart = function() {
+      old <- options(shiny.maxRequestSize = 30*1024^3)
+      on.exit(options(old))
+    }
+  )
 }

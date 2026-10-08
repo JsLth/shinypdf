@@ -60,6 +60,19 @@ custom_css <- tags$style(HTML("
   .rank-list-container .rank-list-item.sortable-ghost { opacity: .4; }
   .rank-list-container { min-height: 48px; }
 
+  /* Sidebar file list */
+  .sidebar-file-list .list-group-item {
+    padding: .45rem .6rem !important;
+    border-radius: .45rem !important;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    margin-bottom: .2rem !important;
+  }
+  .sidebar-file-list .list-group-item:hover {
+    border-color: var(--bs-primary) !important;
+    background: var(--bs-secondary-bg) !important;
+  }
+
   /* Empty state */
   .empty-state .bi { font-size: 2.75rem; }
 
@@ -99,6 +112,28 @@ custom_js <- tags$script(HTML("
     } catch (error) {
         return false;
     }
+  }
+
+  // Two-click 'Confirm?' pattern for remove buttons: first click arms the
+  // button, a second click within 3s actually fires the removal. Avoids a
+  // server-rendered confirmation modal for a near-instant interaction.
+  function pdfConfirmRemove(btn, name) {
+    if (btn.dataset.confirming === '1') {
+      clearTimeout(btn._confirmTimer);
+      Shiny.setInputValue('remove_pdf', name, { priority: 'event' });
+      return;
+    }
+    btn.dataset.confirming = '1';
+    if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
+    btn.innerHTML = 'Confirm?';
+    btn.classList.remove('btn-outline-danger');
+    btn.classList.add('btn-danger');
+    btn._confirmTimer = setTimeout(function () {
+      btn.dataset.confirming = '0';
+      btn.innerHTML = btn.dataset.originalHtml;
+      btn.classList.remove('btn-danger');
+      btn.classList.add('btn-outline-danger');
+    }, 3000);
   }
 "))
 
@@ -171,7 +206,7 @@ result_card <- function(output_id) {
       tags$span("Result", class = "settings-label text-uppercase")
     ),
     card_body(
-      class = "result-zone",
+      class = "result-zone p-0",
       uiOutput(output_id)
     )
   )
@@ -243,7 +278,9 @@ subset_tab <- nav_panel(
         "subset_run", "Extract Pages",
         icon  = bs_icon("collection"),
         class = "btn-primary w-100"
-      )
+      ),
+      tags$hr(class = "my-1"),
+      uiOutput("subset_download_ui")
     ),
     result_card("subset_result_ui")
   )
@@ -275,7 +312,9 @@ combine_tab <- nav_panel(
           "combine_run", "Combine PDFs",
           icon  = bs_icon("union"),
           class = "btn-primary w-100"
-        )
+        ),
+        tags$hr(class = "my-2"),
+        uiOutput("combine_download_ui")
       )
     ),
     result_card("combine_result_ui")
@@ -307,9 +346,9 @@ rotate_tab <- nav_panel(
         "rotate_angle",
         label = tagList(bs_icon("arrow-clockwise"), " Rotation angle"),
         choices = c(
-          "90\u00b0 clockwise"           = "90",
-          "180\u00b0"                    = "180",
-          "270\u00b0 clockwise (90\u00b0 CCW)" = "270"
+          "90\u00b0 clockwise" = "90",
+          "180\u00b0" = "180",
+          "270\u00b0 clockwise" = "270"
         ),
         selected = "90"
       ),
@@ -318,7 +357,9 @@ rotate_tab <- nav_panel(
         "rotate_run", "Rotate Pages",
         icon  = bs_icon("arrow-clockwise"),
         class = "btn-primary w-100"
-      )
+      ),
+      tags$hr(class = "my-1"),
+      uiOutput("rotate_download_ui")
     ),
     result_card("rotate_result_ui")
   )
@@ -443,10 +484,12 @@ ui <- page_navbar(
     tags$span("PDF Toolkit")
   ),
   theme   = app_theme,
-  bg      = "#0f172a",   # slate-900
-  inverse = TRUE,
+  navbar_options = navbar_options(
+    bg = "#0f172a",
+    inverse = TRUE
+  ),
   sidebar = app_sidebar,
-  header  = tagList(custom_css, custom_js),
+  header  = tagList(useSweetAlert(), custom_css, custom_js),
 
   overview_tab,
   split_tab,

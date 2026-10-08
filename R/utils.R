@@ -1,5 +1,27 @@
 # ── Utility helpers ──────────────────────────────────────────────────────────
 
+spdf_dir <- function() file.path(tempdir(), "shinypdf")
+create_shinypdf_dir <- function() {
+  pdir <- spdf_dir()
+  dir.create(pdir, showWarnings = FALSE)
+  dir.create(file.path(pdir, "uploads"), showWarnings = FALSE)
+  dir.create(file.path(pdir, "split"), showWarnings = FALSE)
+  dir.create(file.path(pdir, "subset"), showWarnings = FALSE)
+  dir.create(file.path(pdir, "combine"), showWarnings = FALSE)
+  dir.create(file.path(pdir, "rotate"), showWarnings = FALSE)
+  dir.create(file.path(pdir, "compact"), showWarnings = FALSE)
+  addResourcePath("uploads", file.path(pdir, "uploads"))
+  addResourcePath("split", file.path(pdir, "split"))
+  addResourcePath("subset", file.path(pdir, "subset"))
+  addResourcePath("combine", file.path(pdir, "combine"))
+  addResourcePath("rotate", file.path(pdir, "rotate"))
+  addResourcePath("compact", file.path(pdir, "compact"))
+}
+
+tempfilename <- function(...) {
+  basename(tempfile(...))
+}
+
 #' Format a byte count into a human-readable string
 #' @param bytes Numeric. Size in bytes.
 #' @return A character string, e.g. "1.4 MB".
@@ -90,4 +112,22 @@ find_gs <- function() {
 #' Find the qpdf executable path, or "" if not found
 find_qpdf_bin <- function() {
   unname(Sys.which("qpdf"))
+}
+
+#' Generate a unique file name by appending a counter suffix if needed
+#'
+#' @param name     Character. Desired file name (including extension).
+#' @param existing Character vector of names already in use.
+#' @return A character string guaranteed not to appear in `existing`.
+unique_name <- function(name, existing) {
+  if (!(name %in% existing)) return(name)
+  base <- tools::file_path_sans_ext(name)
+  ext  <- tools::file_ext(name)
+  ext  <- if (nzchar(ext)) paste0(".", ext) else ""
+  i <- 1L
+  repeat {
+    candidate <- sprintf("%s (%d)%s", base, i, ext)
+    if (!(candidate %in% existing)) return(candidate)
+    i <- i + 1L
+  }
 }
