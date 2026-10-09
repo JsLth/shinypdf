@@ -26,84 +26,6 @@ app_theme <- bs_theme(
 )
 
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
-
-custom_css <- tags$style(HTML("
-
-  /* Navbar brand */
-  .navbar-brand { font-weight: 700; letter-spacing: -.025em; font-size: 1.1rem; }
-
-  /* Sidebar tweaks */
-  .bslib-sidebar-layout > .sidebar { border-right: 1px solid var(--bs-border-color); }
-  .sidebar .accordion-button { font-size: 0.8125rem; font-weight: 600; }
-  .sidebar .accordion-body { padding: 0.6rem 0.25rem 0.25rem; }
-
-  /* Sortable rank-list styling */
-  .rank-list-container .rank-list-item {
-    padding: .45rem .75rem !important;
-    border-radius: .45rem !important;
-    font-size: .8125rem !important;
-    border: 1px solid var(--bs-border-color) !important;
-    background: var(--bs-tertiary-bg, #f8fafc) !important;
-    margin-bottom: .3rem !important;
-    cursor: grab;
-    transition: border-color .15s, background .15s;
-  }
-  .rank-list-container .rank-list-item:hover {
-    border-color: var(--bs-primary) !important;
-    background: var(--bs-secondary-bg) !important;
-  }
-  .rank-list-container .rank-list-item.sortable-chosen {
-    background: rgba(37,99,235,.08) !important;
-    border-color: var(--bs-primary) !important;
-    cursor: grabbing;
-  }
-  .rank-list-container .rank-list-item.sortable-ghost { opacity: .4; }
-  .rank-list-container { min-height: 48px; }
-
-  /* Sidebar file list */
-  .sidebar-file-list .list-group-item {
-    padding: .45rem .6rem !important;
-    border-radius: .45rem !important;
-    border: 1px solid transparent !important;
-    background: transparent !important;
-    margin-bottom: .2rem !important;
-  }
-  .sidebar-file-list .list-group-item:hover {
-    border-color: var(--bs-primary) !important;
-    background: var(--bs-secondary-bg) !important;
-  }
-
-  /* Empty state */
-  .empty-state .bi { font-size: 2.75rem; }
-
-  /* PDF overview cards */
-  .pdf-overview-card { transition: box-shadow .2s; }
-  .pdf-overview-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.10) !important; }
-
-  /* Result zone */
-  .result-zone {
-    min-height: 220px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .result-success .bi { font-size: 2.25rem; }
-
-  /* Operation settings card */
-  .settings-label { font-size: .8125rem; font-weight: 600; color: var(--bs-secondary-color); }
-
-  /* Stat strip */
-  .stat-strip { font-size: .78rem; }
-
-  /* Dark-mode overrides */
-  [data-bs-theme=dark] .rank-list-container .rank-list-item {
-    background: var(--bs-tertiary-bg) !important;
-  }
-  [data-bs-theme=dark] .bslib-sidebar-layout > .sidebar {
-    border-right-color: var(--bs-border-color);
-  }
-"))
-
 custom_js <- tags$script(HTML("
   function isCommandInstalled(command, flag = '--version') {
     try {
@@ -114,9 +36,6 @@ custom_js <- tags$script(HTML("
     }
   }
 
-  // Two-click 'Confirm?' pattern for remove buttons: first click arms the
-  // button, a second click within 3s actually fires the removal. Avoids a
-  // server-rendered confirmation modal for a near-instant interaction.
   function pdfConfirmRemove(btn, name) {
     if (btn.dataset.confirming === '1') {
       clearTimeout(btn._confirmTimer);
@@ -489,7 +408,11 @@ ui <- page_navbar(
     inverse = TRUE
   ),
   sidebar = app_sidebar,
-  header  = tagList(useSweetAlert(), custom_css, custom_js),
+  header  = tagList(
+    useSweetAlert(),
+    includeCSS(system.file("www/styles.css", package = "shinypdf")),
+    custom_js
+),
 
   overview_tab,
   split_tab,
