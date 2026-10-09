@@ -2,10 +2,10 @@ server <- function(input, output, session) {
   create_shinypdf_dir()
 
   # ── State ───────────────────────────────────────────────────────────────────
-  # pdf_rv: named list  name -> list(name, path, pages, size)
+  # pdf_rv: list(name, path, pages, size)
   pdf_rv <- reactiveVal(list())
 
-  # Per-operation result storage
+  # Result storages
   split_result <- reactiveVal(NULL)
   subset_result <- reactiveVal(NULL)
   combine_result <- reactiveVal(NULL)
@@ -25,8 +25,21 @@ server <- function(input, output, session) {
       src <- input$pdf_upload$datapath[[i]]
       name <- unique_name(raw_name, names(current))
       if (name != raw_name) renamed <- c(renamed, name)
-      dest <- file.path(dest_dir, "uploads", name)
-      file.copy(src, dest, overwrite = TRUE)
+
+      # Store under a unique on-disk filename rather than overwriting a
+      # same-named file. A same-named destination can still be open/locked
+      # from an earlier session (e.g. a stalled PDF preview request), which
+      # makes file.copy(..., overwrite = TRUE) fail with "Permission denied"
+      # on Windows.
+      dest <- file.path(dest_dir, "uploads", paste0(tempfilename(), ".pdf"))
+      ok <- file.copy(src, dest)
+      if (!ok) {
+        showNotification(
+          paste0("Could not load \u201c", raw_name, "\u201d \u2014 the file may be in use."),
+          type = "error", duration = 8
+        )
+        next
+      }
       meta <- pdf_meta(dest)
       current[[name]] <- list(
         name = name,
@@ -61,9 +74,8 @@ server <- function(input, output, session) {
     closeSweetAlert(session = session)
   })
 
-  # ── Ordered PDFs (insertion order; combine tab has its own drag order) ──────
+  # ── Ordered PDFs ──────
   ordered_pdfs <- reactive(pdf_rv())
-
   pdf_names <- reactive(names(ordered_pdfs()))
 
   # ── Sidebar: file list ───────────────────────────────────────────────────────
@@ -108,12 +120,12 @@ server <- function(input, output, session) {
     }
   })
 
-  # ── Sidebar: click a file to preview it in a popup ──────────────────────────
+  # ── Sidebar ──────────────────────────
   observeEvent(input$view_pdf, {
     p <- pdf_rv()[[input$view_pdf]]
     req(!is.null(p))
 
-    sendSweetAlert(
+    sendSweetAlert( 
       session = session,
       title = p$name,
       html = TRUE,
@@ -123,15 +135,18 @@ server <- function(input, output, session) {
       showCloseButton = TRUE,
       closeOnClickOutside = TRUE,
       text = tagList(
-        tags$iframe(
-          src   = paste0("uploads/", utils::URLencode(p$name)),
-          style = "width: 100%; height: 70vh; border: none;"
+        pdf_display(
+          p$path,
+          url = file.path("uploads", basename(p$path)),
+          pages = p$pages,
+          download = TRUE,
+          has_pdf_viewer = input$has_pdf_viewer
         ),
         tags$div(
           class = "d-flex justify-content-between align-items-center mt-3",
           tags$button(
-            type    = "button",
-            class   = "btn btn-outline-danger",
+            type = "button",
+            class = "btn btn-outline-danger",
             onclick = sprintf(
               'pdfConfirmRemove(this, %s)',
               shQuote(p$name)
@@ -152,6 +167,7 @@ server <- function(input, output, session) {
     total_s <- sum(vapply(pdfs, function(p) if (is.na(p$size)) 0 else p$size, 0))
     tags$div(
       class = "d-flex justify-content-between stat-strip text-secondary",
+      style = "width: 90%; padding-left: 10%;",
       tags$span(tagList(
         bs_icon("files"),
         " ",
@@ -171,7 +187,7 @@ server <- function(input, output, session) {
     }
 
     total_pages <- sum(vapply(pdfs, function(p) if (is.na(p$pages)) 0L else p$pages, 0L))
-    total_size  <- sum(vapply(pdfs, function(p) if (is.na(p$size))  0   else p$size,  0))
+    total_size  <- sum(vapply(pdfs, function(p) if (is.na(p$size)) 0 else p$size, 0))
 
     tagList(
       # Value boxes
@@ -321,7 +337,7 @@ server <- function(input, output, session) {
         downloadButton(
           "split_download",
           "Download ZIP",
-          icon  = bs_icon("file-zip"),
+          icon = bs_icon("file-zip"),
           class = "btn-primary"
         )
       )
@@ -344,7 +360,7 @@ server <- function(input, output, session) {
       zip(zip_path, files = basename(files), root = out_dir)
       split_result(list(
         zip_path = zip_path,
-        n_pages  = length(files),
+        n_pages = length(files),
         pdf_name = p$name
       ))
     }, error = function(e) {
@@ -364,8 +380,8 @@ server <- function(input, output, session) {
   )
 
   # ── SUBSET ──────────────────────────────────────────────────────────────────
-  output$subset_pdf_select_ui  <- pdf_select_ui("subset_pdf_select", "Select PDF")
-  output$subset_page_hint_ui   <- page_hint_ui("subset_pdf_select")
+  output$subset_pdf_select_ui <- pdf_select_ui("subset_pdf_select", "Select PDF")
+  output$subset_page_hint_ui <- page_hint_ui("subset_pdf_select")
 
   output$subset_download_ui <- renderUI({
     res <- subset_result()
@@ -385,7 +401,7 @@ server <- function(input, output, session) {
         downloadButton(
           "subset_download",
           "Download PDF",
-          icon  = bs_icon("download"),
+          icon = bs_icon("download"),
           class = "btn-primary"
         )
       )
@@ -401,9 +417,12 @@ server <- function(input, output, session) {
         "Select pages and click \u201cExtract Pages\u201d."
       )
     } else {
-      tags$iframe(
-        style = "height: 100%; width: 100%;",
-        src = paste0("subset/", basename(res$path))
+      pdf_display(
+        res$path,
+        url = file.path("subset", basename(res$path)),
+        pages = res$n_pages,
+        download = FALSE,
+        has_pdf_viewer = input$has_pdf_viewer
       )
     }
   })
@@ -413,7 +432,7 @@ server <- function(input, output, session) {
     req(input$subset_pdf_select)
     p <- pdf_rv()[[input$subset_pdf_select]]
     req(!is.null(p), !is.na(p$pages))
-    pages  <- parse_pages(input$subset_pages, max_page = p$pages)
+    pages <- parse_pages(input$subset_pages, max_page = p$pages)
 
     if (length(pages) == 0) {
       showNotification(
@@ -422,7 +441,6 @@ server <- function(input, output, session) {
       )
       return()
     }
-
 
     out <- file.path(spdf_dir(), "subset", tempfilename(fileext = ".pdf"))
     tryCatch({
@@ -458,10 +476,10 @@ server <- function(input, output, session) {
       )
     } else {
       rank_list(
-        text     = NULL,
-        labels   = nms,
+        text = NULL,
+        labels = nms,
         input_id = "combine_order",
-        class    = "default-sortable"
+        class = "default-sortable"
       )
     }
   })
@@ -505,9 +523,12 @@ server <- function(input, output, session) {
         "Arrange your PDFs and click \u201cCombine PDFs\u201d."
       )
     } else {
-      tags$iframe(
-        style = "height: 100%; width: 100%;",
-        src = paste0("combine/", basename(res$path))
+      pdf_display(
+        res$path,
+        url = file.path("combine", basename(res$path)),
+        pages = res$n_pages,
+        download = FALSE,
+        has_pdf_viewer = input$has_pdf_viewer
       )
     }
   })
@@ -601,9 +622,12 @@ server <- function(input, output, session) {
         "Choose pages and angle, then click \u201cRotate Pages\u201d."
       )
     } else {
-      tags$iframe(
-        style = "height: 100%; width: 100%;",
-        src = paste0("rotate/", basename(res$path))
+      pdf_display(
+        res$path,
+        url = file.path("rotate", basename(res$path)),
+        pages = res$n_pages,
+        download = FALSE,
+        has_pdf_viewer = input$has_pdf_viewer
       )
     }
   })

@@ -5,12 +5,14 @@ create_shinypdf_dir <- function() {
   pdir <- spdf_dir()
   dir.create(pdir, showWarnings = FALSE)
   dir.create(file.path(pdir, "uploads"), showWarnings = FALSE)
+  dir.create(file.path(pdir, "thumb"), showWarnings = FALSE)
   dir.create(file.path(pdir, "split"), showWarnings = FALSE)
   dir.create(file.path(pdir, "subset"), showWarnings = FALSE)
   dir.create(file.path(pdir, "combine"), showWarnings = FALSE)
   dir.create(file.path(pdir, "rotate"), showWarnings = FALSE)
   dir.create(file.path(pdir, "compact"), showWarnings = FALSE)
   addResourcePath("uploads", file.path(pdir, "uploads"))
+  addResourcePath("thumb", file.path(pdir, "thumb"))
   addResourcePath("split", file.path(pdir, "split"))
   addResourcePath("subset", file.path(pdir, "subset"))
   addResourcePath("combine", file.path(pdir, "combine"))
@@ -96,6 +98,7 @@ badge <- function(text, theme = "secondary") {
 }
 
 #' Find the Ghostscript executable path, or "" if not found
+#' @noRd
 find_gs <- function() {
   candidates <- if (.Platform$OS.type == "windows") {
     c("gswin64c", "gswin32c", "gs")
@@ -110,6 +113,7 @@ find_gs <- function() {
 }
 
 #' Find the qpdf executable path, or "" if not found
+#' @noRd
 find_qpdf_bin <- function() {
   unname(Sys.which("qpdf"))
 }
@@ -119,6 +123,7 @@ find_qpdf_bin <- function() {
 #' @param name     Character. Desired file name (including extension).
 #' @param existing Character vector of names already in use.
 #' @return A character string guaranteed not to appear in `existing`.
+#' @noRd
 unique_name <- function(name, existing) {
   if (!(name %in% existing)) return(name)
   base <- tools::file_path_sans_ext(name)
@@ -129,5 +134,105 @@ unique_name <- function(name, existing) {
     candidate <- sprintf("%s (%d)%s", base, i, ext)
     if (!(candidate %in% existing)) return(candidate)
     i <- i + 1L
+  }
+}
+
+
+#' Render the first page of a PDF file as an image file
+#' 
+#' @param path Path to the PDF file
+#' @param out_path Destination path of the rendered image file
+#' @param dpi Rendering resolution
+#' @returns The output path, invisibly.
+#' @noRd
+pdf_thumbnail <- function(path, out_path, dpi = 110) {
+  tryCatch({
+    pdftools::pdf_convert(
+      path,
+      format = "png",
+      pages = 1,
+      filenames = out_path,
+      dpi = dpi,
+      verbose = FALSE
+    )
+    invisible(out_path)
+  }, error = function(e) NULL)
+}
+
+
+thumb_cache <- new.env(parent = emptyenv())
+get_pdf_thumbnail <- function(path) {
+  cached <- thumb_cache[[path]]
+  if (!is.null(cached) && file.exists(cached)) {
+    return(cached)
+  }
+
+  out <- file.path(
+    spdf_dir(),
+    "thumb",
+    paste0(tempfilename(), ".png")
+  )
+
+  result <- pdf_thumbnail(path, out)
+  if (!is.null(result)) {
+    thumb_cache[[path]] <- result
+  }
+
+  result
+}
+
+
+# `path` is the on-disk filesystem path (used to generate the thumbnail and
+# read the file size); `url` is the matching Shiny resource-relative URL
+# already registered via addResourcePath() in create_shinypdf_dir(), e.g.
+# "uploads/foo.pdf" or "subset/bar.pdf".
+#
+# Note: Chromium-based embedded webviews (Electron, Positron) frequently
+# kill <iframe src="data:..."> navigations outright, surfacing as a generic
+# chrome-error://chromewebdata/ page. A same-origin resource URL is a normal
+# network request and doesn't hit that restriction, so don't swap this back
+# to a base64 data: URI.
+pdf_display <- function(path, url, pages = NULL, download = FALSE, has_pdf_viewer = FALSE) {
+  if (has_pdf_viewer) {
+    tags$iframe(
+      src = url,
+      class = "pdf-viewer",
+      type = "application/pdf"
+    )
+  } else {
+    thumb_path <- get_pdf_thumbnail(path)
+    
+    if (!is.null(thumb_path)) {
+      image <- tags$img(
+        src = file.path("thumb", basename(thumb_path)),
+        class = "thumbnail"
+      )
+    } else {
+      image <- tags$p(
+        class = "text-secondary small py-5 mb-0",
+        "Preview unavailable."
+      )
+    }
+
+    tags$div(
+      class = "text-center",
+      image,
+      tags$p(
+        class = "small text-secondary mt-3 mb-3",
+        if (!is.null(pages) && !is.na(pages) && pages > 1) {
+          sprintf("Showing page 1 of %d \u2014 ", pages)
+        },
+        format_size(file.info(path)$size)
+      ),
+      if (download) {
+        tags$a(
+          href = url,
+          target = "_blank",
+          class = "btn btn-primary",
+          bs_icon("box-arrow-up-right"),
+          " Open full PDF"
+        )
+      }
+    )
   }
 }

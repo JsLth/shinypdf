@@ -25,37 +25,6 @@ app_theme <- bs_theme(
   "accordion-button-active-color" = "#2563eb"
 )
 
-# ── Custom CSS ─────────────────────────────────────────────────────────────────
-custom_js <- tags$script(HTML("
-  function isCommandInstalled(command, flag = '--version') {
-    try {
-        execSync(`${command} ${flag}`, { stdio: 'ignore' });
-        return true;
-    } catch (error) {
-        return false;
-    }
-  }
-
-  function pdfConfirmRemove(btn, name) {
-    if (btn.dataset.confirming === '1') {
-      clearTimeout(btn._confirmTimer);
-      Shiny.setInputValue('remove_pdf', name, { priority: 'event' });
-      return;
-    }
-    btn.dataset.confirming = '1';
-    if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
-    btn.innerHTML = 'Confirm?';
-    btn.classList.remove('btn-outline-danger');
-    btn.classList.add('btn-danger');
-    btn._confirmTimer = setTimeout(function () {
-      btn.dataset.confirming = '0';
-      btn.innerHTML = btn.dataset.originalHtml;
-      btn.classList.remove('btn-danger');
-      btn.classList.add('btn-outline-danger');
-    }, 3000);
-  }
-"))
-
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
 app_sidebar <- sidebar(
@@ -402,17 +371,13 @@ ui <- page_navbar(
     tags$span(bs_icon("file-pdf-fill"), class = "text-danger me-1"),
     tags$span("PDF Toolkit")
   ),
-  theme   = app_theme,
+  theme = app_theme,
   navbar_options = navbar_options(
     bg = "#0f172a",
     inverse = TRUE
   ),
   sidebar = app_sidebar,
-  header  = tagList(
-    useSweetAlert(),
-    includeCSS(system.file("www/styles.css", package = "shinypdf")),
-    custom_js
-),
+  header = tagList(add_external_resources()),
 
   overview_tab,
   split_tab,
