@@ -86,3 +86,10 @@ iframe.pdf-viewer {
   height: 100%;
   border: none;
 }
+
+td.text-truncate {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

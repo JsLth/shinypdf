@@ -1,5 +1,8 @@
 # ── Utility helpers ──────────────────────────────────────────────────────────
 
+# Null-coalescing operator (base R >= 4.4 has it, provide fallback)
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
 spdf_dir <- function() file.path(tempdir(), "shinypdf")
 create_shinypdf_dir <- function() {
   pdir <- spdf_dir()
@@ -65,15 +68,6 @@ parse_pages <- function(pages_str, max_page = Inf) {
   pages[pages >= 1L & pages <= max_page]
 }
 
-#' Extract basic metadata for a PDF file
-#' @param path Character. Path to a PDF file.
-#' @return Named list with `pages` (integer) and `size` (numeric, bytes).
-pdf_meta <- function(path) {
-  list(
-    pages = tryCatch(pdf_length(path), error = function(e) NA_integer_),
-    size  = tryCatch(file.size(path),  error = function(e) NA_real_)
-  )
-}
 
 #' Reusable empty-state UI element
 #' @param icon     Bootstrap icon name string.
@@ -120,21 +114,43 @@ find_qpdf_bin <- function() {
 
 #' Generate a unique file name by appending a counter suffix if needed
 #'
-#' @param name     Character. Desired file name (including extension).
+#' @param name Character. Desired file name (including extension).
 #' @param existing Character vector of names already in use.
 #' @return A character string guaranteed not to appear in `existing`.
 #' @noRd
 unique_name <- function(name, existing) {
   if (!(name %in% existing)) return(name)
   base <- tools::file_path_sans_ext(name)
-  ext  <- tools::file_ext(name)
-  ext  <- if (nzchar(ext)) paste0(".", ext) else ""
-  i <- 1L
-  repeat {
-    candidate <- sprintf("%s (%d)%s", base, i, ext)
-    if (!(candidate %in% existing)) return(candidate)
-    i <- i + 1L
+  ext <- tools::file_ext(name)
+  ext <- if (nzchar(ext)) paste0(".", ext) else ""
+  rgx <- "\\(([0-9])+\\)$"
+  if (grepl(rgx, base)) {
+    i <- strtoi(regex_match(base, rgx, i = 2))
+    base <- trimws(gsub(rgx, "", base))
+    repeat {
+      i <- i + 1
+      name <- sprintf("%s (%d)%s", base, i, ext)
+      if (!name %in% existing) return(name)
+    }
+  } else {
+    i <- 1
+    unique_name(sprintf("%s (%d)%s", base, i, ext), existing)
   }
+}
+
+
+regex_match <- function (text, pattern, i = NULL, ...) {
+  match <- regmatches(text, regexec(pattern, text, ...))
+  if (!is.null(i)) {
+    match <- vapply(match, FUN.VALUE = character(1), function(x) {
+      if (length(x) >= i) {
+        x[[i]]
+      } else {
+        NA_character_
+      }
+    })
+  }
+  match
 }
 
 
