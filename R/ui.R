@@ -77,6 +77,11 @@ page_navbar(
     value = "tab_extract",
     mod_extract_ui("extract")
   ),
+  nav_panel(
+    title = tagList(bs_icon("unlock"), " Lock & Unlock"),
+    value = "tab_lock",
+    mod_lock_ui("lock")
+  ),
 
   nav_spacer(),
   nav_item(

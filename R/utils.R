@@ -3,26 +3,6 @@
 # Null-coalescing operator (base R >= 4.4 has it, provide fallback)
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-spdf_dir <- function() file.path(tempdir(), "shinypdf")
-create_shinypdf_dir <- function() {
-  pdir <- spdf_dir()
-  dir.create(pdir, showWarnings = FALSE)
-  dir.create(file.path(pdir, "uploads"), showWarnings = FALSE)
-  dir.create(file.path(pdir, "thumb"), showWarnings = FALSE)
-  dir.create(file.path(pdir, "split"), showWarnings = FALSE)
-  dir.create(file.path(pdir, "subset"), showWarnings = FALSE)
-  dir.create(file.path(pdir, "combine"), showWarnings = FALSE)
-  dir.create(file.path(pdir, "rotate"), showWarnings = FALSE)
-  dir.create(file.path(pdir, "compact"), showWarnings = FALSE)
-  addResourcePath("uploads", file.path(pdir, "uploads"))
-  addResourcePath("thumb", file.path(pdir, "thumb"))
-  addResourcePath("split", file.path(pdir, "split"))
-  addResourcePath("subset", file.path(pdir, "subset"))
-  addResourcePath("combine", file.path(pdir, "combine"))
-  addResourcePath("rotate", file.path(pdir, "rotate"))
-  addResourcePath("compact", file.path(pdir, "compact"))
-}
-
 tempfilename <- function(...) {
   basename(tempfile(...))
 }
@@ -151,6 +131,40 @@ regex_match <- function (text, pattern, i = NULL, ...) {
     })
   }
   match
+}
+
+
+case_switch <- function(..., .default = NULL) {
+  formulas <- list(...)
+  env <- parent.frame()
+
+  for (fm in formulas) {
+    if (!inherits(fm, "formula") || length(fm) != 3L) {
+      stop("`...` must be a two-sided formula of the form: `condition ~ value`.")
+    }
+
+    cond <- as.logical(eval(fm[[2]], envir = env))
+
+    if (!isTRUE(cond) && !isFALSE(cond)) {
+      cond_expr <- deparse(fm[[2]])
+      warning(
+        sprintf("Expression `%s` does not evaluate to TRUE or FALSE.", cond_expr),
+        call. = FALSE
+      )
+      next
+    }
+
+    if (isTRUE(cond)) {
+      return(eval(fm[[3]], envir = env))
+    }
+  }
+
+  .default
+}
+
+
+to_title <- function(x) {
+  gsub("\\b([[:alpha:]])([[:alpha:]]+)", "\\U\\1\\L\\2", x, perl = TRUE)
 }
 
 

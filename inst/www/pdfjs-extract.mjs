@@ -1,17 +1,13 @@
-// Pull embedded raster images (JPEG/JBIG2/JPX/raw XObjects) out of a PDF
-// using the bundled pdf.js build. This intentionally bypasses page.render():
-// we only need the operator list to find `Do` calls that paint an image
-// XObject, then grab the already-decoded bitmap pdf.js stashes in
-// page.objs/commonObjs — no <canvas> page rendering required.
-import * as pdfjsLib from "/pdfjs/pdf.mjs";
+import * as pdfjsLib from "./pdfjs/build/pdf.mjs";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "./pdfjs/build/pdf.worker.mjs",
+  import.meta.url
+).href;
 
 const { OPS, ImageKind } = pdfjsLib;
 
 function objsGet(objs, id) {
-  // PDFObjects#get() is callback-based: it fires immediately if the object
-  // already resolved, otherwise once decoding finishes.
   return new Promise((resolve) => objs.get(id, resolve));
 }
 
@@ -96,7 +92,7 @@ async function extractImagesFromPage(
   const { fnArray, argsArray } = await page.getOperatorList();
   const out = [];
   const mime = format === "jpeg" ? "image/jpeg"
-           : format === "webp" ? "image/webp"
+           : format.startsWith("webp") ? "image/webp"
            : "image/png";
   const q = typeof quality === "number" ? quality : 0.92;
 
@@ -130,7 +126,7 @@ async function extractImagesFromPage(
     }
 
     const dataUrl =
-      mime === "image/jpeg" || mime === "image/webp"
+      format === "jpeg" || format === "webp"
         ? canvas.toDataURL(mime, q)
         : canvas.toDataURL(mime);
 
@@ -149,8 +145,13 @@ async function extractImagesFromPage(
  * Extract embedded raster images from a PDF.
  * @param {ArrayBuffer|Uint8Array|string} source Raw PDF bytes, or a URL to fetch.
  * @param {{onProgress?: (page: number, total: number) => void}} [opts]
+ * @param {string} format Format of the output image. Can be "png", "jpeg", or "webp".
+ * @param {number} quality Image quality of the lossy formats, i.e. jpeg and webp. Must be between 0 and 1.
+ * @param {Uint8Array} pages Array of pages to extract.
  * @param {integer} min_width Minimum width of image to be extracted.
  * @param {integer} min_height Minimum height of image to be extracted.
+ * @param {boolean} inline Whether inline images should be extracted.
+ * @param {boolean} dedupe Whether to keep track of image hashes and skip hashes that have already been extracted.
  * @returns {Promise<Array<{page:number, index:number, objId:string, width:number, height:number, dataUrl:string}>>}
  */
 export async function extractImagesFromPdf(
@@ -169,7 +170,7 @@ export async function extractImagesFromPdf(
     ...(isBytes ? { data: source } : { url: source }),
     // Needed for JBIG2/JPEG2000 decoding and ICC color conversion; harmless
     // to pass even if a given PDF doesn't use those codecs.
-    wasmUrl: "/pdfjs-wasm/"
+    wasmUrl: new URL("./pdfjs/wasm/", import.meta.url).href
   });
   const seenHashes = dedupe ? new Set() : null;
 
@@ -198,11 +199,15 @@ export async function extractImagesFromPdf(
       onProgress?.(pageNum, pdf.numPages);
     }
   } finally {
-    await pdf.destroy();
+    try {
+      pdf.cleanup?.();
+    } catch (e) {}
+
+    try {
+      loadingTask.destroy?.();
+    } catch (e) {}
   }
   return images;
 }
 
-// Exposed for manual/console use; the Shiny bridge (pdfjs-extract-bridge.js)
-// is what normally calls this.
 window.shinypdfExtractImages = extractImagesFromPdf;

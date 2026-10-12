@@ -4,20 +4,20 @@ mod_rotate_ui <- function(id) {
     settings_card(
       header_label = "Settings",
       header_icon  = "sliders",
-      uiOutput(ns("rotate_pdf_select_ui")),
+      uiOutput(ns("pdf_select_ui")),
       div(
         tags$label(
           class = "form-label settings-label mb-1",
           bs_icon("list-ol"), " Pages to rotate"
         ),
         textInput(
-          ns("rotate_pages"), label = NULL,
+          ns("n_pages"), label = NULL,
           placeholder = "Leave blank for all pages"
         ),
-        uiOutput(ns("rotate_page_hint_ui"))
+        uiOutput(ns("page_hint_ui"))
       ),
       radioButtons(
-        ns("rotate_angle"),
+        ns("angle"),
         label = tagList(bs_icon("arrow-clockwise"), " Rotation angle"),
         choices = c(
           "90\u00b0 clockwise" = "90",
@@ -27,15 +27,18 @@ mod_rotate_ui <- function(id) {
         selected = "90"
       ),
       tags$hr(class = "my-1"),
-      input_task_button(
-        ns("rotate_run"), "Rotate Pages",
-        icon  = bs_icon("arrow-clockwise"),
-        class = "btn-primary w-100"
+      div(
+        id = ns("run_tip"),
+        input_task_button(
+          ns("run"), "Rotate Pages",
+          icon  = bs_icon("arrow-clockwise"),
+          class = "btn-primary w-100"
+        )
       ),
       tags$hr(class = "my-1"),
-      uiOutput(ns("rotate_download_ui"))
+      uiOutput(ns("download_ui"))
     ),
-    result_card(ns("rotate_result_ui"))
+    result_card(ns("result_ui"))
   )
 }
 
@@ -44,10 +47,10 @@ mod_rotate_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
     rotate_result <- reactiveVal(NULL)
     reset_on_upload(upload_event, rotate_result)
 
-    output$rotate_pdf_select_ui <- pdf_select_renderer(session, pdf_names, "rotate_pdf_select", "Select PDF")
-    output$rotate_page_hint_ui  <- page_hint_renderer(input, pdf_rv, "rotate_pdf_select")
+    output$pdf_select_ui <- pdf_select_renderer(session, pdf_names, "pdf_select", "Select PDF")
+    output$page_hint_ui  <- page_hint_renderer(input, pdf_rv, "pdf_select")
 
-    output$rotate_download_ui <- renderUI({
+    output$download_ui <- renderUI({
       res <- rotate_result()
       if (!is.null(res)) {
         tags$div(
@@ -64,7 +67,7 @@ mod_rotate_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
           ),
           tags$p(class = "small text-secondary mb-3", res$pdf_name),
           downloadButton(
-            session$ns("rotate_download"),
+            session$ns("download"),
             "Download PDF",
             icon = bs_icon("download"),
             class = "btn-primary"
@@ -73,7 +76,7 @@ mod_rotate_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
       }
     })
 
-    output$rotate_result_ui <- renderUI({
+    output$result_ui <- renderUI({
       res <- rotate_result()
       if (is.null(res)) {
         empty_state_ui(
@@ -92,18 +95,18 @@ mod_rotate_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
       }
     })
 
-    observeEvent(input$rotate_run, {
+    observe({
       on.exit(update_task_button(
         session = session,
-        "rotate_run",
+        "run",
         state = "ready"
       ))
-      req(input$rotate_pdf_select)
-      p <- pdf_rv()[[input$rotate_pdf_select]]
+      req(input$pdf_select)
+      p <- pdf_rv()[[input$pdf_select]]
       req(!is.null(p), !is.na(p$pages))
-      angle <- as.integer(input$rotate_angle)
+      angle <- as.integer(input$angle)
 
-      pages_str <- trimws(input$rotate_pages %||% "")
+      pages_str <- trimws(input$n_pages %||% "")
       pages <- if (nzchar(pages_str)) {
         parse_pages(pages_str, max_page = p$pages)
       } else {
@@ -135,9 +138,10 @@ mod_rotate_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
           duration = 8
         )
       })
-    })
+    }) |>
+      bindEvent(input$run)
 
-    output$rotate_download <- downloadHandler(
+    output$download <- downloadHandler(
       filename = function() {
         paste0("rotated_", file_path_sans_ext(rotate_result()$pdf_name), ".pdf")
       },

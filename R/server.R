@@ -1,10 +1,3 @@
-# ── App server ─────────────────────────────────────────────────────────────
-# Wires the sidebar module's shared reactives (the master PDF store, plus
-# convenience views over it) into each tab module. `has_pdf_viewer` is set by
-# client-side JS at the document/root level (see add_external_resources() in
-# R/config.R), so it's read here on the root session and threaded down to
-# whichever modules need it, rather than being module-scoped itself.
-
 server <- function(input, output, session) {
   create_shinypdf_dir()
 
@@ -46,4 +39,22 @@ server <- function(input, output, session) {
     "extract",
     pdf_rv = sb$pdf_rv, pdf_names = sb$pdf_names, upload_event = sb$upload_event
   )
+
+  mod_lock_server(
+    "lock",
+    pdf_rv = sb$pdf_rv, pdf_names = sb$pdf_names, upload_event = sb$upload_event
+  )
+
+  toggle_run_button(input, "split", pdf_rv = sb$pdf_rv)
+  toggle_run_button(input, "subset", pdf_rv = sb$pdf_rv)
+  # Combine has no `pdf_select` input (it uses a rank list of all PDFs), so it
+  # needs its own validity check: at least 2 PDFs loaded.
+  toggle_run_button(
+    input, "combine", pdf_rv = sb$pdf_rv,
+    valid = reactive(length(sb$pdf_rv()) >= 2)
+  )
+  toggle_run_button(input, "rotate", pdf_rv = sb$pdf_rv)
+  toggle_run_button(input, "compact", pdf_rv = sb$pdf_rv)
+  toggle_run_button(input, "extract", pdf_rv = sb$pdf_rv)
+  toggle_run_button(input, "lock", pdf_rv = sb$pdf_rv)
 }

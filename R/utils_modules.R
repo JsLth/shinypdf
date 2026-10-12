@@ -1,4 +1,40 @@
-# Standard two-column operation layout: settings (left) + result (right).
+#' Enable/disable a tab's run button based on whether a valid PDF is selected
+#'
+#' @param valid Optional reactive returning `TRUE`/`FALSE`. Defaults to
+#'   checking the tab's own `pdf_select` input against `pdf_rv`; pass a custom
+#'   reactive for tabs (e.g. Combine) that don't have a `pdf_select` input.
+#' @noRd
+toggle_run_button <- function(input, namespace, pdf_rv, valid = NULL, session = getDefaultReactiveDomain()) {
+  ns <- NS(namespace)
+  run_id <- ns("run")
+  tt_id <- ns("run_tip")
+
+  if (is.null(valid)) {
+    pdf_select_id <- ns("pdf_select")
+    valid <- reactive({
+      pdf_select <- input[[pdf_select_id]]
+      if (!isTruthy(pdf_select)) return(FALSE)
+      p <- pdf_rv()[[pdf_select]]
+      !is.null(p) && !is.na(p$pages)
+    })
+  }
+
+  observe({
+    is_valid <- valid()
+
+    if (is_valid) {
+      shinyjs::enable(run_id)
+      remove_tooltip(tt_id)
+    } else {
+      shinyjs::disable(run_id)
+      add_tooltip(tt_id, content = "Load a PDF file first")
+    }
+  })
+}
+
+
+#' Standard two-column operation layout: settings (left) + result (right).
+#' @noRd
 op_layout <- function(..., col_widths = c(4, 8)) {
   layout_columns(
     col_widths = col_widths,
@@ -7,6 +43,8 @@ op_layout <- function(..., col_widths = c(4, 8)) {
   )
 }
 
+#' Card that holds the setting for any kind of PDF manipulation.
+#' @noRd
 settings_card <- function(..., header_label, header_icon) {
   card(
     height = "100%",
@@ -19,6 +57,8 @@ settings_card <- function(..., header_label, header_icon) {
   )
 }
 
+#' Card that holds the contents of the output.
+#' @noRd
 result_card <- function(output_id) {
   card(
     height = "100%",

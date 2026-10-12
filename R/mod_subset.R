@@ -1,22 +1,20 @@
-# ── Module: Subset tab ─────────────────────────────────────────────────────
-
 mod_subset_ui <- function(id) {
   ns <- NS(id)
   op_layout(
     settings_card(
       header_label = "Settings",
       header_icon  = "sliders",
-      uiOutput(ns("subset_pdf_select_ui")),
+      uiOutput(ns("pdf_select_ui")),
       div(
         tags$label(
           class = "form-label settings-label mb-1",
           bs_icon("list-ol"), " Pages to extract"
         ),
         textInput(
-          ns("subset_pages"), label = NULL,
-          placeholder = "e.g.\u2002 1, 3, 5\u20148, 11"
+          ns("n_pages"), label = NULL,
+          placeholder = "e.g.\u2002 1, 3, 5\u20138, 11"
         ),
-        uiOutput(ns("subset_page_hint_ui"))
+        uiOutput(ns("page_hint_ui"))
       ),
       tags$p(
         class = "small text-secondary mb-0",
@@ -24,15 +22,18 @@ mod_subset_ui <- function(id) {
         "Extract a specific set of pages into a new PDF."
       ),
       tags$hr(class = "my-1"),
-      input_task_button(
-        ns("subset_run"), "Extract Pages",
-        icon  = bs_icon("collection"),
-        class = "btn-primary w-100"
+      div(
+        id = ns("run_tip"),
+        input_task_button(
+          ns("run"), "Subset Pages",
+          icon  = bs_icon("collection"),
+          class = "btn-primary w-100"
+        )
       ),
       tags$hr(class = "my-1"),
-      uiOutput(ns("subset_download_ui"))
+      uiOutput(ns("download_ui"))
     ),
-    result_card(ns("subset_result_ui"))
+    result_card(ns("result_ui"))
   )
 }
 
@@ -41,10 +42,10 @@ mod_subset_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
     subset_result <- reactiveVal(NULL)
     reset_on_upload(upload_event, subset_result)
 
-    output$subset_pdf_select_ui <- pdf_select_renderer(session, pdf_names, "subset_pdf_select", "Select PDF")
-    output$subset_page_hint_ui <- page_hint_renderer(input, pdf_rv, "subset_pdf_select")
+    output$pdf_select_ui <- pdf_select_renderer(session, pdf_names, "pdf_select", "Select PDF")
+    output$page_hint_ui <- page_hint_renderer(input, pdf_rv, "pdf_select")
 
-    output$subset_download_ui <- renderUI({
+    output$download_ui <- renderUI({
       res <- subset_result()
       if (!is.null(res)) {
         tags$div(
@@ -60,7 +61,7 @@ mod_subset_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
           ),
           tags$p(class = "small text-secondary mb-3", res$pdf_name),
           downloadButton(
-            session$ns("subset_download"),
+            session$ns("download"),
             "Download PDF",
             icon = bs_icon("download"),
             class = "btn-primary"
@@ -69,7 +70,7 @@ mod_subset_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
       }
     })
 
-    output$subset_result_ui <- renderUI({
+    output$result_ui <- renderUI({
       res <- subset_result()
       if (is.null(res)) {
         empty_state_ui(
@@ -88,12 +89,12 @@ mod_subset_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
       }
     })
 
-    observeEvent(input$subset_run, {
-      on.exit(update_task_button(session = session, "subset_run", state = "ready"))
-      req(input$subset_pdf_select)
-      p <- pdf_rv()[[input$subset_pdf_select]]
+    observeEvent(input$run, {
+      on.exit(update_task_button(session = session, "run", state = "ready"))
+      req(input$pdf_select)
+      p <- pdf_rv()[[input$pdf_select]]
       req(!is.null(p), !is.na(p$pages))
-      pages <- parse_pages(input$subset_pages, max_page = p$pages)
+      pages <- parse_pages(input$n_pages, max_page = p$pages)
 
       if (length(pages) == 0) {
         showNotification(
@@ -120,7 +121,7 @@ mod_subset_server <- function(id, pdf_rv, pdf_names, upload_event, has_pdf_viewe
       })
     })
 
-    output$subset_download <- downloadHandler(
+    output$download <- downloadHandler(
       filename = function() {
         paste0("subset_", file_path_sans_ext(subset_result()$pdf_name), ".pdf")
       },

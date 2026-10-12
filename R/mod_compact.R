@@ -1,5 +1,3 @@
-# ── Module: Compact tab ────────────────────────────────────────────────────
-
 mod_compact_ui <- function(id) {
   ns <- NS(id)
   op_layout(
@@ -9,15 +7,15 @@ mod_compact_ui <- function(id) {
       header_icon  = "sliders",
 
       # PDF selector
-      uiOutput(ns("compact_pdf_select_ui")),
+      uiOutput(ns("pdf_select_ui")),
 
       # Tool selector — rendered server-side so only available tools appear.
       # Shows a warning card instead when neither gs nor qpdf is installed.
-      uiOutput(ns("compact_tool_ui")),
+      uiOutput(ns("tool_ui")),
 
       # ── Ghostscript options (only visible when gs is selected) ──────────────
       conditionalPanel(
-        condition = sprintf("input['%s'] === 'gs'", ns("compact_tool")),
+        condition = sprintf("input['%s'] === 'gs'", ns("tool")),
         tags$div(
           class = "border rounded-3 p-3 mt-1",
           style = "background: var(--bs-tertiary-bg);",
@@ -33,10 +31,10 @@ mod_compact_ui <- function(id) {
             label = tagList(bs_icon("stars"), " Quality preset"),
             choices = c(
               "None (manual settings below)" = "",
-              "Screen \u2014 72 dpi, smallest file"  = "screen",
-              "eBook \u2014 150 dpi, balanced"        = "ebook",
-              "Printer \u2014 300 dpi, print quality" = "printer",
-              "Prepress \u2014 300 dpi, color-safe"   = "prepress"
+              "Screen: 72 dpi, smallest file" = "screen",
+              "eBook: 150 dpi, balanced" = "ebook",
+              "Printer: 300 dpi, print quality" = "printer",
+              "Prepress: 300 dpi, color-safe" = "prepress"
             ),
             selected = "ebook",
             width = "100%"
@@ -98,13 +96,17 @@ mod_compact_ui <- function(id) {
       ),
 
       tags$hr(class = "my-1"),
-      input_task_button(
-        ns("compact_run"), "Compact PDF",
-        icon  = bs_icon("file-zip"),
-        class = "btn-primary w-100"
-      )
+      div(
+        id = ns("run_tip"),
+        input_task_button(
+          ns("run"), "Compact PDF",
+          icon = bs_icon("file-zip"),
+          class = "btn-primary w-100"
+        )
+      ),
+      uiOutput(ns("download_ui"))
     ),
-    result_card(ns("compact_result_ui"))
+    result_card(ns("result_ui"))
   )
 }
 
@@ -119,11 +121,11 @@ mod_compact_server <- function(id, pdf_rv, pdf_names, upload_event) {
     gs_ok <- nzchar(gs_path)
     qpdf_ok <- nzchar(qpdf_path)
 
-    output$compact_pdf_select_ui <- pdf_select_renderer(session, pdf_names, "compact_pdf_select", "Select PDF")
+    output$pdf_select_ui <- pdf_select_renderer(session, pdf_names, "pdf_select", "Select PDF")
 
     # Tool selector: only shows tools that are actually installed.
     # Falls back to a warning card when neither is available.
-    output$compact_tool_ui <- renderUI({
+    output$tool_ui <- renderUI({
       if (!gs_ok && !qpdf_ok) {
         card(
           class = "bg-warning-subtle border-warning-subtle mt-1",
@@ -143,16 +145,41 @@ mod_compact_server <- function(id, pdf_rv, pdf_names, upload_event) {
         if (qpdf_ok) choices <- c(choices, "qpdf: linearise & clean" = "qpdf")
         if (gs_ok) choices <- c(choices, "Ghostscript: full re-distill" = "gs")
         selectInput(
-          session$ns("compact_tool"),
+          session$ns("tool"),
           label = tagList(bs_icon("wrench"), " Compression tool"),
           choices  = choices,
           selected = if (gs_ok) "gs" else "qpdf",
-          width    = "100%"
+          width = "100%"
         )
       }
     })
 
-    output$compact_result_ui <- renderUI({
+    output$download_ui <- renderUI({
+      res <- compact_result()
+      if (!is.null(res)) {
+        tags$div(
+          class = "result-success text-center",
+          bs_icon("check-circle-fill", class = "text-success"),
+          tags$h6(
+            class = "mt-2 mb-0 fw-semibold",
+            sprintf(
+              "Reduced PDF size from %s to %s",
+              format_size(res$original_size),
+              format_size(res$new_size)
+            )
+          ),
+          tags$p(class = "small text-secondary mb-3", res$pdf_name),
+          downloadButton(
+            session$ns("download"),
+            "Download PDF",
+            icon = bs_icon("download"),
+            class = "btn-primary"
+          )
+        )
+      }
+    })
+
+    output$result_ui <- renderUI({
       res <- compact_result()
       if (is.null(res)) {
         empty_state_ui(
@@ -199,7 +226,7 @@ mod_compact_server <- function(id, pdf_rv, pdf_names, upload_event) {
             tags$div(savings_label)
           ),
           downloadButton(
-            session$ns("compact_download"),
+            session$ns("download"),
             "Download PDF",
             icon  = bs_icon("download"),
             class = "btn-primary"
@@ -208,12 +235,12 @@ mod_compact_server <- function(id, pdf_rv, pdf_names, upload_event) {
       }
     })
 
-    observeEvent(input$compact_run, {
-      on.exit(update_task_button(session = session, "compact_run", state = "ready"))
-      req(input$compact_pdf_select)
-      p <- pdf_rv()[[input$compact_pdf_select]]
+    observeEvent(input$run, {
+      on.exit(update_task_button(session = session, "run", state = "ready"))
+      req(input$pdf_select)
+      p <- pdf_rv()[[input$pdf_select]]
       req(!is.null(p))
-      tool <- input$compact_tool %||% "default"
+      tool <- input$tool %||% "default"
 
       out <- tempfile(fileext = ".pdf")
       file.copy(p$path, out)
@@ -267,7 +294,7 @@ mod_compact_server <- function(id, pdf_rv, pdf_names, upload_event) {
       })
     })
 
-    output$compact_download <- downloadHandler(
+    output$download <- downloadHandler(
       filename = function() {
         paste0(
           "compacted_",

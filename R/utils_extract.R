@@ -27,7 +27,7 @@ extract_pdf_images <- function(url,
                                input_id = "extracted_images",
                                id = url,
                                format = "png",
-                               quality = 1,
+                               quality = 92,
                                pages = NULL,
                                min_width = 2,
                                min_height = 2,
@@ -41,7 +41,7 @@ extract_pdf_images <- function(url,
       url = url,
       inputId = session$ns(input_id),
       format = format,
-      quality = quality,
+      quality = quality / 100,
       pages = pages %||% list(),
       min_width = min_width,
       min_height = min_height,
@@ -49,4 +49,12 @@ extract_pdf_images <- function(url,
       dedupe = dedupe
     )
   )
+}
+
+
+write_b64 <- function(b64, path) {
+  raw <- base64enc::base64decode(b64)
+  con <- file(path, open = "wb")
+  on.exit(close(con), add = TRUE)
+  writeBin(raw, con)
 }

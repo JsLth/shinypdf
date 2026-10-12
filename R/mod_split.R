@@ -1,26 +1,27 @@
-# ── Module: Split tab ──────────────────────────────────────────────────────
-
 mod_split_ui <- function(id) {
   ns <- NS(id)
   op_layout(
     settings_card(
       header_label = "Settings",
       header_icon  = "sliders",
-      uiOutput(ns("split_pdf_select_ui")),
-      uiOutput(ns("split_info_ui")),
+      uiOutput(ns("pdf_select_ui")),
+      uiOutput(ns("info_ui")),
       tags$p(
         class = "small text-secondary mb-0",
         bs_icon("info-circle"), " ",
         "Splits the PDF into individual single-page files, bundled as a ZIP."
       ),
       tags$hr(class = "my-1"),
-      input_task_button(
-        ns("split_run"), "Split PDF",
-        icon  = bs_icon("scissors"),
-        class = "btn-primary w-100"
-      )
+      div(
+        id = ns("run_tip"),
+        input_task_button(
+          ns("run"), "Split PDF",
+          icon  = bs_icon("scissors"),
+          class = "btn-primary w-100"
+        )
+      ),
     ),
-    result_card(ns("split_result_ui"))
+    result_card(ns("result_ui"))
   )
 }
 
@@ -29,11 +30,11 @@ mod_split_server <- function(id, pdf_rv, pdf_names, upload_event) {
     split_result <- reactiveVal(NULL)
     reset_on_upload(upload_event, split_result)
 
-    output$split_pdf_select_ui <- pdf_select_renderer(session, pdf_names, "split_pdf_select", "Select PDF")
+    output$pdf_select_ui <- pdf_select_renderer(session, pdf_names, "pdf_select", "Select PDF")
 
-    output$split_info_ui <- renderUI({
-      req(input$split_pdf_select)
-      p <- pdf_rv()[[input$split_pdf_select]]
+    output$info_ui <- renderUI({
+      req(input$pdf_select)
+      p <- pdf_rv()[[input$pdf_select]]
       req(!is.null(p), !is.na(p$pages))
       tags$p(
         class = "small text-secondary mb-0",
@@ -41,7 +42,7 @@ mod_split_server <- function(id, pdf_rv, pdf_names, upload_event) {
       )
     })
 
-    output$split_result_ui <- renderUI({
+    output$result_ui <- renderUI({
       res <- split_result()
       if (is.null(res)) {
         empty_state_ui(
@@ -59,7 +60,7 @@ mod_split_server <- function(id, pdf_rv, pdf_names, upload_event) {
           ),
           tags$p(class = "small text-secondary mb-3", res$pdf_name),
           downloadButton(
-            session$ns("split_download"),
+            session$ns("download"),
             "Download ZIP",
             icon = bs_icon("file-zip"),
             class = "btn-primary"
@@ -68,10 +69,10 @@ mod_split_server <- function(id, pdf_rv, pdf_names, upload_event) {
       }
     })
 
-    observeEvent(input$split_run, {
-      on.exit(update_task_button(session = session, "split_run", state = "ready"))
-      req(input$split_pdf_select)
-      p <- pdf_rv()[[input$split_pdf_select]]
+    observeEvent(input$run, {
+      on.exit(update_task_button(session = session, "run", state = "ready"))
+      req(input$pdf_select)
+      p <- pdf_rv()[[input$pdf_select]]
       req(!is.null(p))
 
       out_dir <- tempfile("split_")
@@ -96,7 +97,7 @@ mod_split_server <- function(id, pdf_rv, pdf_names, upload_event) {
       })
     })
 
-    output$split_download <- downloadHandler(
+    output$download <- downloadHandler(
       filename = function() {
         paste0("split_", file_path_sans_ext(split_result()$pdf_name), ".zip")
       },

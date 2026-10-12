@@ -1,5 +1,3 @@
-# ── Module: Combine tab ────────────────────────────────────────────────────
-
 mod_combine_ui <- function(id) {
   ns <- NS(id)
   op_layout(
@@ -17,18 +15,21 @@ mod_combine_ui <- function(id) {
           bs_icon("grip-vertical"), " ",
           "Drag to reorder. PDFs are merged top to bottom."
         ),
-        uiOutput(ns("combine_rank_list_ui")),
+        uiOutput(ns("rank_list_ui")),
         tags$hr(class = "my-2"),
-        input_task_button(
-          ns("combine_run"), "Combine PDFs",
-          icon  = bs_icon("union"),
-          class = "btn-primary w-100"
+        div(
+          id = ns("run_tip"),
+          input_task_button(
+            ns("run"), "Combine PDFs",
+            icon = bs_icon("union"),
+            class = "btn-primary w-100"
+          )
         ),
         tags$hr(class = "my-2"),
-        uiOutput(ns("combine_download_ui"))
+        uiOutput(ns("download_ui"))
       )
     ),
-    result_card(ns("combine_result_ui"))
+    result_card(ns("result_ui"))
   )
 }
 
@@ -37,7 +38,7 @@ mod_combine_server <- function(id, pdf_rv, ordered_pdfs, pdf_names, upload_event
     combine_result <- reactiveVal(NULL)
     reset_on_upload(upload_event, combine_result)
 
-    output$combine_rank_list_ui <- renderUI({
+    output$rank_list_ui <- renderUI({
       nms <- pdf_names()
       if (length(nms) == 0) {
         tags$p(
@@ -48,15 +49,13 @@ mod_combine_server <- function(id, pdf_rv, ordered_pdfs, pdf_names, upload_event
         rank_list(
           text = NULL,
           labels = nms,
-          input_id = session$ns("combine_order"),
+          input_id = session$ns("order"),
           class = "default-sortable"
         )
       }
     })
 
-    output$combine_download_ui <- renderUI({
-      # Note: this previously read `subset_result()` instead of
-      # `combine_result()` — fixed as part of the module split.
+    output$download_ui <- renderUI({
       res <- combine_result()
       if (!is.null(res)) {
         tags$div(
@@ -77,16 +76,16 @@ mod_combine_server <- function(id, pdf_rv, ordered_pdfs, pdf_names, upload_event
             format_size(res$size)
           ),
           downloadButton(
-            session$ns("combine_download"),
+            session$ns("download"),
             "Download PDF",
-            icon  = bs_icon("download"),
+            icon = bs_icon("download"),
             class = "btn-primary"
           )
         )
       }
     })
 
-    output$combine_result_ui <- renderUI({
+    output$result_ui <- renderUI({
       res <- combine_result()
       if (is.null(res)) {
         empty_state_ui(
@@ -105,16 +104,16 @@ mod_combine_server <- function(id, pdf_rv, ordered_pdfs, pdf_names, upload_event
       }
     })
 
-    observeEvent(input$combine_run, {
+    observeEvent(input$run, {
       on.exit(update_task_button(
         session = session,
-        "combine_run",
+        "run",
         state = "ready"
       ))
       all_pdfs <- ordered_pdfs()
 
       # Respect the rank list order from the combine tab
-      ordered_names <- input$combine_order
+      ordered_names <- input$order
       if (!is.null(ordered_names) && length(ordered_names) > 0) {
         valid <- intersect(ordered_names, names(all_pdfs))
         rest <- setdiff(names(all_pdfs), valid)
@@ -150,7 +149,7 @@ mod_combine_server <- function(id, pdf_rv, ordered_pdfs, pdf_names, upload_event
       })
     })
 
-    output$combine_download <- downloadHandler(
+    output$download <- downloadHandler(
       filename = function() "combined.pdf",
       content  = function(file) file.copy(combine_result()$path, file)
     )
